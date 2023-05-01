@@ -23,22 +23,12 @@ void error(const char * msg){
     exit(-1);
 } 
 
-void handle_get_response(char buffer[]) {
-    FILE *in;
-    char command[3];
-    char filename[20];
-
-    sscanf(buffer, "%s %s", command, filename);
-
-    in = fopen(filename, "r");
-
-    if(in == NULL) {
-        printf("Could not open: %s\n", filename);
-        printf("Make sure that you got the name right.\n");
-        return;
+void write_to_socket(int client_fd, char buffer[]) {
+    int s = write(client_fd, buffer, 100);
+    if(s<0) {
+        error("Writing to socket");
     }
-
-    printf("Successfully opened: %s\n", filename);
+    printf("Successful write");
 }
 
 /**
@@ -101,16 +91,23 @@ int main(int argc, char *argv[])
     }
 
     //Message work
-    char* start_message = "Hello from the server!.\n";
+    char* start_message = "Hello from the server!\n";
+    char* server_ok_message = "SERVER 200 OK\n\n";
+    char* server_error_message = "SERVER 404 Not Found\n";
+    char* server_505_message = "SERVER 501 Put Error\n";
+    char* newline_at_end = "\n\n\n";
+    int server_ok_message_len = strlen(server_ok_message); 
+    int server_error_message_len = strlen(server_error_message);
+    int server_505_len = strlen(server_505_message);
+    int newline_len = strlen(newline_at_end);
+
     char buffer[100];
     memset(buffer, 0, 100);
 
     strncpy(buffer, start_message, strlen(start_message));
 
     int s = write(client_fd, buffer, 100);
-    if(s<0) {
-        error("Writing to socket");
-    }
+    if(s<0) {error("Writing to socket");}
     
     memset(buffer, 0, 100);
     int r = read(client_fd, buffer, 100);
@@ -123,12 +120,68 @@ int main(int argc, char *argv[])
 
         //Do something if it is a 'get' request
         if(strncmp(buffer, "get", 3) == 0 || strncmp(buffer, "GET", 3) == 0) {
-            char *pointerToBuffer = &buffer;
-            handle_get_response(pointerToBuffer);
-        }
-        //Print out content if it is a 'put' request
-        else if(strncmp(buffer, "put", 3) == 0 || strncmp(buffer, "PUT", 3) == 0) {
+            FILE *in;
+            char command[3];
+            char filename[20];
 
+            sscanf(buffer, "%s %s", command, filename);
+
+            in = fopen(filename, "r");
+
+            if(in == NULL) {  
+                memset(buffer, 0, 100);
+                strncpy(buffer, server_error_message, server_error_message_len);
+                s = write(client_fd, buffer, 100);
+            }
+            else {
+                /**Print out the output */
+                //Print the SERVER 200 OK content
+                memset(buffer, 0, 100);
+                strncpy(buffer, server_ok_message, server_ok_message_len);
+                s = write(client_fd, buffer, 100);
+                if(s<0) {error("Writing to socket");}
+
+                //Print file contents
+                memset(buffer, 0, 100);
+                while (EOF != fscanf(in, "%100[^\n]\n", buffer)){
+                    //Print an individual line of samplex.txt to the User
+                    s = write(client_fd, buffer, 100);
+                    if(s<0) {error("Writing to socket");}
+                    memset(buffer, 0, 100);
+
+                    //Add a newline at the end of the samplex.txt
+                    s = write(client_fd, "\n", strlen("\n"));
+                    if(s<0) {error("Writing to socket");}
+                    memset(buffer, 0, 100);
+                }
+                //Print end \n content
+                memset(buffer, 0, 100);
+                strncpy(buffer, newline_at_end, newline_len);
+                s = write(client_fd, buffer, 100);
+                if(s<0) {error("Writing to socket");}
+                fclose(in);
+                /* end of printing output*/
+            }
+        }
+        else if(strncmp(buffer, "put", 3) == 0 || strncmp(buffer, "PUT", 3) == 0) {
+            //Print out content if it is a 'put' request
+            FILE *in;
+            char command[3];
+            char filename[20];
+
+            sscanf(buffer, "%s %s", command, filename);
+
+            in = fopen(filename, "w");
+
+            if(in == NULL) {  
+                memset(buffer, 0, 100);
+                strncpy(buffer, server_error_message, server_error_message_len);
+                s = write(client_fd, buffer, 100);
+            }
+            else {
+                /** Edit items*/
+
+            }
         }
         else {
             printf("Did not recognise command: %s\n", buffer);
