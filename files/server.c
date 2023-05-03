@@ -141,56 +141,54 @@ int main(int argc, char *argv[])
         error("Error binding sock");
     }
 
-    /**
-     * SOMEWHERE HERE ADD A WHILE LOOP SO IT IS ALWAYS LISTENING FOR NEW CONNECTIONS
-    */
-    //Time to listen for connections
-    if(listen(fd, SOMAXCONN) < 0) {
-        error("Listening error");
-    }
-
-    //Accept client connection
-    struct sockaddr_in client_addr;
-    int addrlen = sizeof(client_addr);
-    int client_fd = accept(fd, (struct sockaddr *)&client_addr, (socklen_t*)&addrlen);
-
-    if(client_fd < 0) {
-        error("Error accepting client. ");
-    }
-
-    int buflen = 200;
-    char buffer[buflen];
-    
-    write_to_user(buffer, start_message, strlen(start_message), client_fd, buflen);
-    
-    memset(buffer, 0, buflen);
-    int r = read(client_fd, buffer, buflen);
-
-    //Keep running until I get 'bye' or BYE in the first 3 letters from user
-    /**
-     * MIGHT WANNA CHANGE THIS TO A .CONTAINS() METHOD IF U CAN FIND IT SOMEWHERE
-    */
-    while(strncmp(buffer, "bye", 3) != 0 && strncmp(buffer, "BYE", 3) != 0) {
-        if(r < 0) {
-            error("Error reading from client socket");
-        }
-        if(strncmp(buffer, "get", 3) == 0 || strncmp(buffer, "GET", 3) == 0) {
-            handle_get_response(buffer, client_fd, buflen);
-        }
-        else if(strncmp(buffer, "put", 3) == 0 || strncmp(buffer, "PUT", 3) == 0) {
-            handle_put_request(buffer, client_fd, buflen);
-        }
-        else {
-            printf("Did not recognise command: %s\n", buffer);
+    while(1) {
+        //Time to listen for connections
+        if(listen(fd, SOMAXCONN) < 0) {
+            error("Listening error");
         }
 
+        //Accept client connection
+        struct sockaddr_in client_addr;
+        int addrlen = sizeof(client_addr);
+        int client_fd = accept(fd, (struct sockaddr *)&client_addr, (socklen_t*)&addrlen);
+
+        if(client_fd < 0) {
+            error("Error accepting client. ");
+        }
+
+        int buflen = 200;
+        char buffer[buflen];
+        
+        write_to_user(buffer, start_message, strlen(start_message), client_fd, buflen);
+        
         memset(buffer, 0, buflen);
-        r = read(client_fd, buffer, buflen);
+        int r = read(client_fd, buffer, buflen);
+
+        //Keep running until I get 'bye' or BYE in the first 3 letters from user
+        /**
+         * MIGHT WANNA CHANGE THIS TO A .CONTAINS() METHOD IF U CAN FIND IT SOMEWHERE
+        */
+        while(strncmp(buffer, "bye", 3) != 0 && strncmp(buffer, "BYE", 3) != 0) {
+            if(r < 0) {
+                error("Error reading from client socket");
+            }
+            if(strncmp(buffer, "get", 3) == 0 || strncmp(buffer, "GET", 3) == 0) {
+                handle_get_response(buffer, client_fd, buflen);
+            }
+            else if(strncmp(buffer, "put", 3) == 0 || strncmp(buffer, "PUT", 3) == 0) {
+                handle_put_request(buffer, client_fd, buflen);
+            }
+            else {
+                printf("Did not recognise command: %s\n", buffer);
+            }
+            memset(buffer, 0, buflen);
+            r = read(client_fd, buffer, buflen);
+        }
+        
+        //END THE CONNECTION
+        close(client_fd);
+        printf("Closed connection!\n");
     }
-    
-    //END THE CONNECTION
-    close(client_fd);
-    printf("Closed connection!\n");
     return 0;
 }
 
