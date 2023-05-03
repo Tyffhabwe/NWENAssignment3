@@ -18,23 +18,83 @@
 #include<stdlib.h>
 #include<unistd.h>
 
+
+/** A store of messages that are useful */
+char* start_message = "HELLO\n";
+char* server_ok_message = "SERVER 200 OK\n\n";
+char* server_error_message = "SERVER 404 Not Found\n";
+char* server_505_message = "SERVER 501 Put Error\n";
+char* server_500_message = "SERVER 500 Get Error\n";
+char* newline_at_end = "\n\n";
+char* singular_newline_char = "\n";
+
 void error(const char * msg){
     printf("Error : %s.\n", msg);
     exit(-1);
 } 
 
-void write_to_socket(int client_fd, char buffer[]) {
-    int s = write(client_fd, buffer, 100);
+void write_to_socket(int client_fd, char buffer[], int buflen) {
+    int s = write(client_fd, buffer, buflen);
     if(s<0) {
         error("Writing to socket");
     }
     printf("Successful write\n");
 }
 
-void write_to_user(char buffer[], char* message, int message_length, int client_fd) {
-    memset(buffer, 0, 100);
+void write_to_user(char buffer[], char* message, int message_length, int client_fd, int buflen) {
+    memset(buffer, 0, buflen);
     strncpy(buffer, message, message_length);
-    write_to_socket(client_fd, buffer);
+    write_to_socket(client_fd, buffer, buflen);
+}
+
+void handle_get_response(char buffer[], int client_fd, int buflen) {
+    
+    int server_ok_message_len = strlen(server_ok_message); 
+    int server_error_message_len = strlen(server_error_message);
+    int server_505_len = strlen(server_505_message);
+    int server_500_len = strlen(server_500_message);
+    int newline_len = strlen(newline_at_end);
+    int singular_newline_len = strlen(singular_newline_char);
+
+    FILE *in;
+    char command[3];
+    char filename[20];
+
+    memset(filename, '\0', 20);
+
+    sscanf(buffer, "%s %s", command, filename);
+    
+    if(filename[0] == '\0') {
+        write_to_user(buffer, server_500_message, server_500_len, client_fd, buflen);
+        return;
+    }
+
+    in = fopen(filename, "r");
+
+    if(in == NULL) {
+        write_to_user(buffer, server_error_message, server_error_message_len, client_fd, buflen);
+        return;
+    }
+    
+    write_to_user(buffer, server_ok_message, server_ok_message_len, client_fd, buflen);
+
+    //Print file contents
+    memset(buffer, 0, buflen);
+
+    while (EOF != fscanf(in, "%200[^\n]\n", buffer)){
+        /* Print one line to user with /n afterwards */
+        write_to_socket(client_fd, buffer, buflen);
+        memset(buffer, 0, buflen);
+        write_to_user(buffer, singular_newline_char, singular_newline_len, client_fd, buflen);
+    }
+    write_to_user(buffer, newline_at_end, newline_len, client_fd, buflen);
+    fclose(in);
+}
+
+void handle_put_request(char buffer[], int client_fd, int buflen) {
+    /*
+    * THEN FINISH THIS METHOD WITH GREAT INSIPIRATION FROM ABOVE
+    */
 }
 /**
  * The main function should be able to accept a command-line argument
@@ -81,6 +141,9 @@ int main(int argc, char *argv[])
         error("Error binding sock");
     }
 
+    /**
+     * SOMEWHERE HERE ADD A WHILE LOOP SO IT IS ALWAYS LISTENING FOR NEW CONNECTIONS
+    */
     //Time to listen for connections
     if(listen(fd, SOMAXCONN) < 0) {
         error("Listening error");
@@ -95,79 +158,34 @@ int main(int argc, char *argv[])
         error("Error accepting client. ");
     }
 
-    //Message work
-    char* start_message = "Hello from the server!\n";
-    char* server_ok_message = "SERVER 200 OK\n\n";
-    char* server_error_message = "SERVER 404 Not Found\n";
-    char* server_505_message = "SERVER 501 Put Error\n";
-    char* newline_at_end = "\n\n\n";
-    char* singular_newline_char = "\n";
-    int server_ok_message_len = strlen(server_ok_message); 
-    int server_error_message_len = strlen(server_error_message);
-    int server_505_len = strlen(server_505_message);
-    int newline_len = strlen(newline_at_end);
-    int singular_newline_len = strlen(singular_newline_char);
-
-    char buffer[100];
-    memset(buffer, 0, 100);
-
-    strncpy(buffer, start_message, strlen(start_message));
-
-    write_to_socket(client_fd, buffer);
+    int buflen = 200;
+    char buffer[buflen];
     
-    memset(buffer, 0, 100);
-    int r = read(client_fd, buffer, 100);
+    write_to_user(buffer, start_message, strlen(start_message), client_fd, buflen);
+    
+    memset(buffer, 0, buflen);
+    int r = read(client_fd, buffer, buflen);
 
     //Keep running until I get 'bye' or BYE in the first 3 letters from user
+    /**
+     * MIGHT WANNA CHANGE THIS TO A .CONTAINS() METHOD IF U CAN FIND IT SOMEWHERE
+    */
     while(strncmp(buffer, "bye", 3) != 0 && strncmp(buffer, "BYE", 3) != 0) {
         if(r < 0) {
             error("Error reading from client socket");
         }
-
-        //Do something if it is a 'get' request
         if(strncmp(buffer, "get", 3) == 0 || strncmp(buffer, "GET", 3) == 0) {
-            FILE *in;
-            char command[3];
-            char filename[20];
-
-            sscanf(buffer, "%s %s", command, filename);
-            
-            //CHECK THAT WE ACTUALLY GOT A VALUE FOR A GET REQUEST
-            if(filename[0] == '\0') {
-                printf("NAME WAS NULL");
-            }
-            in = fopen(filename, "r");
-
-            if(in == NULL) {
-                write_to_user(buffer, server_error_message, server_error_message_len, client_fd);
-            }
-            else {
-                /**Print out the output */
-                //Print the SERVER 200 OK content
-                write_to_user(buffer, server_ok_message, server_ok_message_len, client_fd);
-
-                //Print file contents
-                memset(buffer, 0, 100);
-                while (EOF != fscanf(in, "%100[^\n]\n", buffer)){
-                    //Print an individual line of samplex.txt to the User
-                    write_to_socket(client_fd, buffer);
-                    memset(buffer, 0, 100);
-                    write_to_user(buffer, singular_newline_char, singular_newline_len, client_fd);
-                }
-                //Print end \n content
-                write_to_user(buffer, newline_at_end, newline_len, client_fd);
-                fclose(in);
-                /* end of printing output*/
-            }
+            handle_get_response(buffer, client_fd, buflen);
         }
         else if(strncmp(buffer, "put", 3) == 0 || strncmp(buffer, "PUT", 3) == 0) {
+            handle_put_request(buffer, client_fd, buflen);
         }
         else {
             printf("Did not recognise command: %s\n", buffer);
         }
 
-        memset(buffer, 0, 100);
-        r = read(client_fd, buffer, 100);
+        memset(buffer, 0, buflen);
+        r = read(client_fd, buffer, buflen);
     }
     
     //END THE CONNECTION
