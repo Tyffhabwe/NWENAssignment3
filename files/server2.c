@@ -18,7 +18,6 @@
 #include<stdlib.h>
 #include<unistd.h>
 
-
 /** A store of messages that are useful */
 char* test = "YOU ARE OUT OF THE WRITING PHASE BROTHER";
 char* start_message = "HELLO\n";
@@ -150,7 +149,36 @@ void handle_put_request(char buffer[], int client_fd, int buflen) {
 
     write_to_user(buffer, test, strlen(test), client_fd, buflen);
     fclose(in);
+}
 
+/** Method to ecapsulate doing all the server request work exactly once
+ * What this means is that this method stops after we get a 'bye' from client
+ * and closes client_fd
+*/
+void handle_server_requests_once(int client_fd) {
+    int buflen = 200;
+    char buffer[buflen];
+
+    write_to_user(buffer, start_message, strlen(start_message), client_fd, buflen);
+    read_user_content_to_buffer(buffer, client_fd, buflen);
+
+    //Keep running until I get 'bye' or BYE in the first 3 letters from user
+    while(strncmp(buffer, "bye", 3) != 0 && strncmp(buffer, "BYE", 3) != 0) {
+        
+        if(strncmp(buffer, "get", 3) == 0 || strncmp(buffer, "GET", 3) == 0) {
+            handle_get_response(buffer, client_fd, buflen);
+        }
+        else if(strncmp(buffer, "put", 3) == 0 || strncmp(buffer, "PUT", 3) == 0) {
+            handle_put_request(buffer, client_fd, buflen);
+        }
+        else {
+            write_to_user(buffer, server_502_message, strlen(server_502_message), client_fd, buflen);
+        }
+        read_user_content_to_buffer(buffer, client_fd, buflen);
+    }
+
+    close(client_fd);
+    printf("Closed connection!\n");
 }
 /**
  * The main function should be able to accept a command-line argument
@@ -197,7 +225,9 @@ int main(int argc, char *argv[])
         error("Error binding sock");
     }
 
+    //WHILE LOOP WAS HERE
     while(1) {
+    
         //Time to listen for connections
         if(listen(fd, SOMAXCONN) < 0) {
             error("Listening error");
@@ -207,36 +237,26 @@ int main(int argc, char *argv[])
         struct sockaddr_in client_addr;
         int addrlen = sizeof(client_addr);
         int client_fd = accept(fd, (struct sockaddr *)&client_addr, (socklen_t*)&addrlen);
-
         if(client_fd < 0) {
             error("Error accepting client. ");
         }
 
-        int buflen = 200;
-        char buffer[buflen];
-        
-        write_to_user(buffer, start_message, strlen(start_message), client_fd, buflen);
-        read_user_content_to_buffer(buffer, client_fd, buflen);
-    
-        //Keep running until I get 'bye' or BYE in the first 3 letters from user
-        /**
-         * MIGHT WANNA CHANGE THIS TO A .CONTAINS() METHOD IF U CAN FIND IT SOMEWHERE
-        */
-        while(strncmp(buffer, "bye", 3) != 0 && strncmp(buffer, "BYE", 3) != 0) {
-            
-            if(strncmp(buffer, "get", 3) == 0 || strncmp(buffer, "GET", 3) == 0) {
-                handle_get_response(buffer, client_fd, buflen);
-            }
-            else if(strncmp(buffer, "put", 3) == 0 || strncmp(buffer, "PUT", 3) == 0) {
-                handle_put_request(buffer, client_fd, buflen);
-            }
-            else {
-                write_to_user(buffer, server_502_message, strlen(server_502_message), client_fd, buflen);
-            }
-            read_user_content_to_buffer(buffer, client_fd, buflen);
+        int pid; int rv;
+        pid=fork();
+
+        if(pid == -1) {
+            error("Error: Something went wrong with fork()\n");
         }
-        close(client_fd);
-        printf("Closed connection!\n");
+        else if(pid == 0) {
+            /** CHILD PROCESS */
+            handle_server_requests_once(client_fd);
+        }
+        else{
+            /** PARENT PROCESS */
+            client_fd = accept(fd, (struct sockaddr *)&client_addr, (socklen_t*)&addrlen);
+            if(client_fd < 0) {error("Error accepting client. ");}
+        }
+
     }
     return 0;
 }
