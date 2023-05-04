@@ -225,24 +225,23 @@ int main(int argc, char *argv[])
         error("Error binding sock");
     }
 
+    //Time to listen for connections
+    if(listen(fd, SOMAXCONN) < 0) {
+        error("Listening error");
+    }
+
     //WHILE LOOP WAS HERE
-    while(1) {
     
-        //Time to listen for connections
-        if(listen(fd, SOMAXCONN) < 0) {
-            error("Listening error");
-        }
+    while(1) {
 
         //Accept client connection
         struct sockaddr_in client_addr;
         int addrlen = sizeof(client_addr);
         int client_fd = accept(fd, (struct sockaddr *)&client_addr, (socklen_t*)&addrlen);
-        if(client_fd < 0) {
-            error("Error accepting client. ");
-        }
+        if(client_fd < 0) {error("Error accepting client. ");}
 
         int pid; int rv;
-        pid=fork();
+        pid = fork();
 
         if(pid == -1) {
             error("Error: Something went wrong with fork()\n");
@@ -250,11 +249,10 @@ int main(int argc, char *argv[])
         else if(pid == 0) {
             /** CHILD PROCESS */
             handle_server_requests_once(client_fd);
+            exit(0);
         }
         else{
             /** PARENT PROCESS */
-            client_fd = accept(fd, (struct sockaddr *)&client_addr, (socklen_t*)&addrlen);
-            if(client_fd < 0) {error("Error accepting client. ");}
         }
 
     }
