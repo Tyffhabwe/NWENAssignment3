@@ -179,6 +179,7 @@ void handle_server_requests_once(int client_fd) {
 
     close(client_fd);
     printf("Closed connection!\n");
+    exit(0);
 }
 /**
  * The main function should be able to accept a command-line argument
@@ -231,7 +232,7 @@ int main(int argc, char *argv[])
     }
 
     //WHILE LOOP WAS HERE
-    
+
     while(1) {
 
         //Accept client connection
@@ -240,11 +241,15 @@ int main(int argc, char *argv[])
         int client_fd = accept(fd, (struct sockaddr *)&client_addr, (socklen_t*)&addrlen);
         if(client_fd < 0) {error("Error accepting client. ");}
 
-        int pid; int rv;
+        int pid;
         pid = fork();
 
         if(pid == -1) {
-            error("Error: Something went wrong with fork()\n");
+            /** Unsuccessful fork*/
+            int buflen = 200;
+            char buffer[buflen];
+            write_to_user(buffer, start_message, strlen(start_message), client_fd, buflen);
+            read_user_content_to_buffer(buffer, client_fd, buflen);
         }
         else if(pid == 0) {
             /** CHILD PROCESS */
@@ -253,6 +258,7 @@ int main(int argc, char *argv[])
         }
         else{
             /** PARENT PROCESS */
+            close(client_fd);
         }
 
     }

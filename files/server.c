@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
         /**
          * MIGHT WANNA CHANGE THIS TO A .CONTAINS() METHOD IF U CAN FIND IT SOMEWHERE
         */
-        while(strncmp(buffer, "bye", 3) != 0 && strncmp(buffer, "BYE", 3) != 0) {
+        while(strncasecmp(buffer, "BYE", 3) != 0) {
             
             if(strncmp(buffer, "get", 3) == 0 || strncmp(buffer, "GET", 3) == 0) {
                 handle_get_response(buffer, client_fd, buflen);
@@ -238,6 +238,7 @@ int main(int argc, char *argv[])
         close(client_fd);
         printf("Closed connection!\n");
     }
+
     return 0;
 }
 
