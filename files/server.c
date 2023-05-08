@@ -23,6 +23,7 @@
 char* test = "YOU ARE OUT OF THE WRITING PHASE BROTHER";
 char* start_message = "HELLO\n";
 char* server_ok_message = "SERVER 200 OK\n\n";
+char* server_201_message = "SERVER 201 Created\n";
 char* server_error_message = "SERVER 404 Not Found\n";
 char* server_505_message = "SERVER 501 Put Error\n";
 char* server_500_message = "SERVER 500 Get Error\n";
@@ -72,8 +73,12 @@ void handle_get_response(char buffer[], int client_fd, int buflen) {
     FILE *in;
     char command[3];
     char filename[20];
+    char extra_stuff[170];
+
     memset(filename, '\0', 20);
-    sscanf(buffer, "%s %s", command, filename);
+    memset(extra_stuff, '\0', 170);
+
+    sscanf(buffer, "%s %s %s", command, filename, extra_stuff);
     
     if(filename[0] == '\0') {
         write_to_user(buffer, server_500_message, server_500_len, client_fd, buflen);
@@ -84,6 +89,11 @@ void handle_get_response(char buffer[], int client_fd, int buflen) {
 
     if(in == NULL) {
         write_to_user(buffer, server_error_message, server_error_message_len, client_fd, buflen);
+        return;
+    }
+
+    if(extra_stuff[0] != '\0') {
+        write_to_user(buffer, server_500_message, server_500_len, client_fd, buflen);
         return;
     }
     
@@ -98,6 +108,7 @@ void handle_get_response(char buffer[], int client_fd, int buflen) {
         memset(buffer, 0, buflen);
         write_to_user(buffer, singular_newline_char, singular_newline_len, client_fd, buflen);
     }
+    printf("Successful write.\n");
     write_to_user(buffer, newline_at_end, newline_len, client_fd, buflen);
     fclose(in);
 }
@@ -111,12 +122,21 @@ void handle_put_request(char buffer[], int client_fd, int buflen) {
     FILE *in;
     char command[3];
     char filename[20];
+    char extra_stuff[170];
+
     memset(filename, '\0', 20);
-    sscanf(buffer, "%s %s", command, filename);
+    memset(extra_stuff, '\0', 170);
+
+    sscanf(buffer, "%s %s %s", command, filename, extra_stuff);
 
     in = fopen(filename, "w");
 
     if(in == NULL) {
+        write_to_user(buffer, server_501_message, strlen(server_501_message), client_fd, buflen);
+        return;
+    }
+
+    if(extra_stuff[0] != '\0') {
         write_to_user(buffer, server_501_message, strlen(server_501_message), client_fd, buflen);
         return;
     }
@@ -128,6 +148,9 @@ void handle_put_request(char buffer[], int client_fd, int buflen) {
             //Means we have found a second straight '\n' and so stop taking user input
             if(strncmp(buffer, "\n", 1) == 0) {
                 taking_user_input = 0;
+                fclose(in);
+                write_to_user(buffer, server_201_message, strlen(server_201_message), client_fd, buflen);
+                return;
             }
             //Means we found an '\n' in previous buffer but have found something else so no longer on alert
             else{
@@ -141,15 +164,10 @@ void handle_put_request(char buffer[], int client_fd, int buflen) {
                 on_alert = 1;
             }
         }
-
         fputs(buffer, in);
-
-        printf("What is in the buffer: %s\n", buffer);
         read_user_content_to_buffer(buffer, client_fd, buflen);
     }
 
-    write_to_user(buffer, test, strlen(test), client_fd, buflen);
-    fclose(in);
 
 }
 /**
@@ -219,15 +237,11 @@ int main(int argc, char *argv[])
         read_user_content_to_buffer(buffer, client_fd, buflen);
     
         //Keep running until I get 'bye' or BYE in the first 3 letters from user
-        /**
-         * MIGHT WANNA CHANGE THIS TO A .CONTAINS() METHOD IF U CAN FIND IT SOMEWHERE
-        */
         while(strncasecmp(buffer, "BYE", 3) != 0) {
-            
-            if(strncmp(buffer, "get", 3) == 0 || strncmp(buffer, "GET", 3) == 0) {
+            if(strncasecmp(buffer, "GET", 3) == 0) {
                 handle_get_response(buffer, client_fd, buflen);
             }
-            else if(strncmp(buffer, "put", 3) == 0 || strncmp(buffer, "PUT", 3) == 0) {
+            else if(strncasecmp(buffer, "PUT", 3) == 0) {
                 handle_put_request(buffer, client_fd, buflen);
             }
             else {
